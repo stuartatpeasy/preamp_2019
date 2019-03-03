@@ -1,0 +1,58 @@
+avr
+------------------------------------------------------------------------------
+nEXP_CS		OUT		MCP23S17 port expander chip select
+SCLK		OUT
+MOSI		OUT
+MISO		IN
+UART_TX		OUT		Bluetooth module command interface TX
+UART_RX		IN		Bluetooth module command interface RX
+PB_POWER	IN		Power pushbutton
+REG_SW		OUT		Enable signal for analogue section voltage regulators
+IR_RX		IN		Infrared receiver
+VOL_ENC_A	IN
+VOL_ENC_B	IN
+POT_BAL		IN	A
+V+_SENSE	IN	A
+V-_SENSE	IN	A	Actually senses ratio of +15V and -15V rails
+5V_SENSE	IN	A
+----------------+-------------------------------------------------------------
+4 adc		|
+6 in		|
+5 out		|
+1 UPDI		| 16 total / 18
+----------------+-------------------------------------------------------------
+
+
+mcp23s17
+------------------------------------------------------------------------------
+PB_CH1		IN
+PB_CH2		IN
+PB_CH3		IN
+PB_CH4		IN
+LED_CH1		OUT
+LED_CH2		OUT
+LED_CH3		OUT
+LED_CH4		OUT
+LED_MUTE	OUT
+TPIC_nCS	OUT		TPIC6B595 chip select
+TPIC_nGATE	OUT		TPIC6B595 output enable
+TPIC_RCLK	OUT		TPIC6B595 register clock
+PGA_nCS		OUT		PGA2311 chip select
+PGA_nMUTE	OUT		PGA2311 mute
+nMUTE		OUT
+----------------+-------------------------------------------------------------
+4 in		|
+10 out		| 14 total / 16
+----------------+-------------------------------------------------------------
+
+
+tpic6b595n
+------------------------------------------------------------------------------
+RL1		OUT
+RL2		OUT
+RL3		OUT
+RL4		OUT
+RLOUT		OUT
+------------------------------------------------------------------------------
+5 out
+------------------------------------------------------------------------------
