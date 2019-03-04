@@ -8,5 +8,8 @@
 */
 
 void controls_init();
+void volume_up();
+void volume_down();
+void volume_apply_change();
 
 #endif

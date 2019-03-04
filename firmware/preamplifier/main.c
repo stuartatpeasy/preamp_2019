@@ -123,9 +123,11 @@ void firmware_main()
                         break;
 
                     case IR_CMD_VOL_UP:
+                        volume_up();
                         break;
 
                     case IR_CMD_VOL_DOWN:
+                        volume_down();
                         break;
 
                     default:
@@ -133,5 +135,7 @@ void firmware_main()
                 }
             }
         }
+
+        volume_apply_change();
     }
 }

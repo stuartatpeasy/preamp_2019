@@ -143,6 +143,13 @@ static const uint8_t vol_ctrl_map[96] PROGMEM =
 #define ENC_POS_MIN         (0)
 #define ENC_POS_MAX         (95)
 
+// Rate, in Hz, at which controls are sampled.
+#define CONTROL_READ_FREQ   (4000)
+
+// Number of control-read cycles during which control positions must be unchanged before control
+// positions are written to EEPROM.
+#define EEPROM_WRITE_WAIT   (2 * CONTROL_READ_FREQ)     // 2-second delay
+
 // These variables are used as de-bouncing accumulators for the rotary encoder inputs.
 static uint8_t debounce_a, debounce_b;
 
@@ -159,7 +166,18 @@ static int8_t balance;
 // The position of the volume control rotary encoder is stored in volume_enc_pos.
 static uint8_t volume_enc_pos;
 
+// Flag indicating that a volume/balance control position has changed but the change has not yet
+// been written to the programmable gain amplifier.
+static uint8_t change_pending;
 
+// Counter used to implement a delay following a control change before the change is written to
+// EEPROM.  For a write to be initiated, controls must be stable for a fixed period of time.
+static uint16_t eeprom_write_countdown;
+
+
+// controls_init() - initialise peripherals related to the handling of controls and settings in
+// the preamplifier.
+//
 void controls_init()
 {
     gpio_make_output(GPIOA(4));             // Temporary: busy signal
@@ -182,13 +200,13 @@ void controls_init()
     bal_accum = 0;
     balance = 0;
 
+    change_pending = 0;
+    eeprom_write_countdown = 0;
+
     // TODO: read initial volume control rotary encoder position from EEPROM
     volume_enc_pos = 0;
 
     // Configure timer D
-    TCD0_CMPASET = 0;
-    TCD0_CMPACLR = 1;
-    TCD0_CMPBSET = 2;
     TCD0_CMPBCLR = F_CPU / 4000;                // Set 250ns (4kHz) period
     TCD0_INTCTRL = TCD_OVF_bm;                  // Enable interrupt on overflow
     TCD0_CTRLA = TCD_CLKSEL_SYSCLK_gc;          // Clk src = sys clock
@@ -200,6 +218,8 @@ void controls_init()
 }
 
 
+// ISR triggered at a predetermined frequency in order to read control inputs.
+//
 ISR(TCD0_OVF_vect)
 {
     isr_controls();
@@ -207,11 +227,12 @@ ISR(TCD0_OVF_vect)
 }
 
 
+// isr_controls() - read all controls and initiate the appropriate action.
+//
 static void isr_controls()
 {
     static uint8_t enc_state = 0;
     static int32_t bal_smoothed = 0;
-    uint8_t changed = 0;
 
     gpio_set(GPIOA(4));     // Start busy
 
@@ -227,16 +248,10 @@ static void isr_controls()
         // Convert 2-bit Gray code value in {debounce_b, debounce_a} to binary value in new_val
         const uint8_t new_state = debounce_b ? 3 - (debounce_a & 1) : (debounce_a & 1);
 
-        if((new_state == ((enc_state + 1) & 3)) && (volume_enc_pos < ENC_POS_MAX))
-        {
-            ++volume_enc_pos;       // Clockwise
-            changed = 1;
-        }
-        else if((new_state == ((enc_state - 1) & 3)) && (volume_enc_pos > ENC_POS_MIN))
-        {
-            --volume_enc_pos;       // Anti-clockwise
-            changed = 1;
-        }
+        if(new_state == ((enc_state + 1) & 3))
+            volume_up();            // Clockwise
+        else if(new_state == ((enc_state - 1) & 3))
+            volume_down();          // Anti-clockwise
 
         enc_state = new_state;
     }
@@ -250,10 +265,57 @@ static void isr_controls()
     {
         bal_smoothed = bal_accum;
         balance = ((bal_smoothed >> 8) - 512) / 24;
-        changed = 1;
+        eeprom_write_countdown = EEPROM_WRITE_WAIT;
+        change_pending = 1;
     }
 
-    if(changed)
+    if(eeprom_write_countdown && !--eeprom_write_countdown)
+    {
+        // FIXME - initiate EEPROM write
+        debug_putchar('W');
+    }
+
+    gpio_clear(GPIOA(4));   // End busy
+}
+
+
+// volume_up() - if the current volume level is below the maximum, increase output volume level by
+// one step and set the "change pending" flag so that the new volume level will be applied next
+// time the volume_apply_change() function is called.
+//
+void volume_up()
+{
+    if(volume_enc_pos < ENC_POS_MAX)
+    {
+        ++volume_enc_pos;
+        change_pending = 1;
+        eeprom_write_countdown = EEPROM_WRITE_WAIT;
+    }
+}
+
+
+// volume_down() - if the current volume level is above the minimum, decrease output volume level
+// by one step and set the "change pending" flag so that the new volume level will be applied next
+// time the volume_apply_change() function is called.
+//
+void volume_down()
+{
+    if(volume_enc_pos > 0)
+    {
+        --volume_enc_pos;
+        change_pending = 1;
+        eeprom_write_countdown = EEPROM_WRITE_WAIT;
+    }
+}
+
+
+// volume_apply_change() - if there have been changes to the output volume levels (as a result of
+// a change in the position of the volume or balance controls), as indicated by the change_pending
+// flag, apply the new volume levels to the PGA2311 programmable-gain amplifier.
+//
+void volume_apply_change()
+{
+    if(change_pending)
     {
         const uint8_t base_val = pgm_read_byte(&vol_ctrl_map[volume_enc_pos]);
         int16_t left_gain = base_val + balance, right_gain = base_val - balance;
@@ -270,17 +332,15 @@ static void isr_controls()
         if(right_gain > 255)
             right_gain = 255;
 
-
-//        gpio_make_output(PIN_PGA_nCS);      // TEMP: assert PGA nCS
+        //gpio_make_output(PIN_PGA_nCS);      // TEMP: assert PGA nCS
         spi0_tx(right_gain);                // Transmit right channel gain value
         spi0_tx(left_gain);                 // Transmit left channel gain value
-//        gpio_make_input(PIN_PGA_nCS);       // TEMP: negate PGA nCS
+        //gpio_make_input(PIN_PGA_nCS);       // TEMP: negate PGA nCS
 
         spi0_read();                        // } Perform two dummy reads to
         spi0_read();                        // } clear the SPI input buffer
 
         debug_printf("%d %d\n", left_gain, right_gain);
+        change_pending = 0;
     }
-
-    gpio_clear(GPIOA(4));   // End busy
 }
