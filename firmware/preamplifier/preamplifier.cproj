@@ -144,6 +144,12 @@
     <Compile Include="dev\pga2311.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="ir.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="ir.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="lib\adc.c">
       <SubType>compile</SubType>
     </Compile>
