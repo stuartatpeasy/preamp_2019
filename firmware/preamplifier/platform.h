@@ -33,20 +33,22 @@
                            ATtiny816
                        +---------------+
                   VDD -| 1          20 |- GND
-                  PA4 -| 2          19 |- PA3
-                  PA5 -| 3          18 |- PA2
-                  PA6 -| 4          17 |- PA1
+       VPL_SENSE  PA4 -| 2          19 |- PA3  SPI_SCK
+       VMI_SENSE  PA5 -| 3          18 |- PA2
+        5V_SENSE  PA6 -| 4          17 |- PA1  SPI_MOSI
          BAL_POT  PA7 -| 5          16 |- PA0  UPDI
-                  PB5 -| 6          15 |- PC3
+        PB_POWER  PB5 -| 6          15 |- PC3
                   PB4 -| 7          14 |- PC2
                   PB3 -| 8          13 |- PC1
-        DEBUG_TX  PB2 -| 9          12 |- PC0
+        DEBUG_TX  PB2 -| 9          12 |- PC0  IR_RX
        VOL_ENC_A  PB1 -| 10         11 |- PB0  VOL_ENC_B
                        +---------------+
 */
 
 // Port A
 #define PIN_BAL_POT                 GPIOA(7)        // [AI] Balance pot wiper
+#define PIN_VPL_SENSE               GPIOA(6)        // [AI] Vplus (+15V) sense
+#define PIN_VMI_SENSE               GPIOA(5)        // [AI] Vminus (-15V) sense (indirect)
 
 // Port B
 #define PIN_VOL_ENC_A               GPIOB(1)        // [I] Volume rotary encoder, pin B
@@ -54,6 +56,7 @@
 
 // Port C
 #define PIN_PGA_nCS                 GPIOC(3)        // [O] TEMP: PGA chip select
+#define PIN_IR_RX                   GPIOC(0)        // [I] Infrared demodulator input
 
 #endif      // PLATFORM_H_INC
 

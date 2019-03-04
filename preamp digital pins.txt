@@ -6,20 +6,19 @@ MOSI		OUT
 MISO		IN
 UART_TX		OUT		Bluetooth module command interface TX
 UART_RX		IN		Bluetooth module command interface RX
-PB_POWER	IN		Power pushbutton
+PB_POWER	IN	PB5	Power pushbutton
 REG_SW		OUT		Enable signal for analogue section voltage regulators
 IR_RX		IN		Infrared receiver
 VOL_ENC_A	IN
 VOL_ENC_B	IN
-POT_BAL		IN	A
-V+_SENSE	IN	A
-V-_SENSE	IN	A	Actually senses ratio of +15V and -15V rails
-5V_SENSE	IN	A
+POT_BAL		AIN	PA7
+V+_SENSE	AIN	PA6
+V-_SENSE	AIN	PA5	Actually senses ratio of +15V and -15V rails
 ----------------+-------------------------------------------------------------
-4 adc		|
+3 adc		|
 6 in		|
 5 out		|
-1 UPDI		| 16 total / 18
+1 UPDI		| 15 total / 18
 ----------------+-------------------------------------------------------------
 
 
@@ -34,25 +33,23 @@ LED_CH2		OUT
 LED_CH3		OUT
 LED_CH4		OUT
 LED_MUTE	OUT
-TPIC_nCS	OUT		TPIC6B595 chip select
-TPIC_nGATE	OUT		TPIC6B595 output enable
 TPIC_RCLK	OUT		TPIC6B595 register clock
 PGA_nCS		OUT		PGA2311 chip select
 PGA_nMUTE	OUT		PGA2311 mute
 nMUTE		OUT
 ----------------+-------------------------------------------------------------
 4 in		|
-10 out		| 14 total / 16
+9 out		| 13 total / 16
 ----------------+-------------------------------------------------------------
 
 
 tpic6b595n
 ------------------------------------------------------------------------------
-RL1		OUT
-RL2		OUT
-RL3		OUT
-RL4		OUT
-RLOUT		OUT
+RL1		OUT	DRAIN7	17
+RL2		OUT	DRAIN6	16
+RL3		OUT	DRAIN5	15
+RL4		OUT	DRAIN4	14
+RLOUT		OUT	DRAIN3	7
 ------------------------------------------------------------------------------
 5 out
 ------------------------------------------------------------------------------

@@ -4,12 +4,15 @@
     Stuart Wallace <stuartw@atom.net>, September 2018.
 */
 
-#include "platform.h"       // for MODULE_TYPE
+#include "ir.h"
+#include "platform.h"           // for MODULE_TYPE
 #include "lib/adc.h"
 #include "lib/clk.h"
 #include "lib/debug.h"
+#include "lib/gpio.h"
 #include "lib/vref.h"
 #include "volume.h"
+#include <avr/interrupt.h>      // sei()
 #include <util/delay.h>
 
 
@@ -43,9 +46,13 @@ int main(void)
 }
 
 
+
 void firmware_main()
 {
     volume_init();
+    ir_init();
+
+    sei();
 
     while(1)
     {
