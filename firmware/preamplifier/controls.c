@@ -1,17 +1,22 @@
 /*
-    volume.h - reads rotary encoder and balance pot; uses readings to drive PGA2311 variable-gain
-    amplifier.
+    controls.c - reads rotary encoder, balance pot and pushbuttons; uses readings to drive PGA2311
+    variable-gain amplifier, relays, channel-indicator LEDs, etc.
 
     Stuart Wallace <stuartw@atom.net>, February 2019.
 */
 
-#include "volume.h"
+#include "platform.h"
+#include "controls.h"
 #include "lib/adc.h"
 #include "lib/debug.h"
 #include "lib/gpio.h"
 #include "lib/spi.h"
+#include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <stdlib.h>
+
+
+static void isr_controls();
 
 
 // This array maps the 96 possible values, representing distinct volume-control settings, to gain
@@ -132,7 +137,6 @@ static const uint8_t vol_ctrl_map[96] PROGMEM =
 // eight consecutive reads have returned the same value, i.e. the accumulator reaches a value of
 // 0x00 or 0xff.
 #define ENC_IS_STABLE(x)    (((x) == 0x00) || ((x) == 0xff))
-//#define ENC_IS_STABLE(x)    !(((x) + 1) & 0xfe)
 
 // Minimum and maximum position values for the volume-control encoder.  The encoder can be rotated
 // past these values, but such additional rotation is ignored.
@@ -155,24 +159,17 @@ static int8_t balance;
 // The position of the volume control rotary encoder is stored in volume_enc_pos.
 static uint8_t volume_enc_pos;
 
-static ADCChannel_t adc_channel_balance;
 
-
-void volume_init()
+void controls_init()
 {
     gpio_make_output(GPIOA(4));             // Temporary: busy signal
 
     gpio_make_input(PIN_VOL_ENC_A);
     gpio_make_input(PIN_VOL_ENC_B);
-    gpio_make_output(PIN_PGA_nCS);           // TEMP: PGA nCS pin: only assert; tri-state while negated
+    gpio_make_output(PIN_PGA_nCS);          // TEMP: PGA nCS pin: only assert; tri-state while negated
     gpio_clear(PIN_PGA_nCS);                // TEMP: PGA nCS pin: only assert
     gpio_set_pullup(PIN_VOL_ENC_A, 1);
     gpio_set_pullup(PIN_VOL_ENC_B, 1);
-
-    // Initialise SPI port 0 - this is the control interface for the PGA2311 IC.
-    spi0_configure_master(PinsetDefault, SPIClkDiv4);
-    spi0_port_activate(1);
-    spi0_enable(1);
 
     // Set the LSB (and only the LSB) in the de-bouncing accumulators in order to force eight
     // consecutive identical reads before a stable state is reached.  This prevents glitching on
@@ -188,11 +185,29 @@ void volume_init()
     // TODO: read initial volume control rotary encoder position from EEPROM
     volume_enc_pos = 0;
 
-    adc_channel_balance = adc_channel_from_gpio(PIN_BAL_POT);
+    // Configure timer D
+    TCD0_CMPASET = 0;
+    TCD0_CMPACLR = 1;
+    TCD0_CMPBSET = 2;
+    TCD0_CMPBCLR = F_CPU / 4000;                // Set 250ns (4kHz) period
+    TCD0_INTCTRL = TCD_OVF_bm;                  // Enable interrupt on overflow
+    TCD0_CTRLA = TCD_CLKSEL_SYSCLK_gc;          // Clk src = sys clock
+
+    while(!(TCD0_STATUS & TCD_ENRDY_bm))        // Wait for counter to become ready
+        ;
+
+    TCD0_CTRLA |= TCD_ENABLE_bm;                // Enable
 }
 
 
-void volume()
+ISR(TCD0_OVF_vect)
+{
+    isr_controls();
+    TCD0_INTFLAGS = 0xff;   // Acknowledge interrupts
+}
+
+
+static void isr_controls()
 {
     static uint8_t enc_state = 0;
     static int32_t bal_smoothed = 0;
@@ -226,7 +241,7 @@ void volume()
         enc_state = new_state;
     }
 
-    adc_set_channel(adc_channel_balance);
+    adc_set_channel(adc_channel_from_gpio(PIN_BAL_POT));
 
     bal_accum -= bal_accum >> 8;
     bal_accum += adc_convert();

@@ -22,9 +22,14 @@
 #define debug_puthex_word(w)    usart0_puthex_word(w)
 #define debug_flush()           usart0_flush_tx()
 
-void debug_init();
-void debug_printf(char *fmt, ...);
 void debug_put_reg8_p(const char *msg, const uint8_t regval);
+
+void debug_init();
+#if defined(DEBUG_WITH_PRINTF)
+void debug_printf(char *fmt, ...);
+#else
+#define debug_printf(fmt, ...)
+#endif // defined(DEBUG_WITH_PRINTF)
 
 #else
 
@@ -35,8 +40,9 @@ void debug_put_reg8_p(const char *msg, const uint8_t regval);
 #define debug_flush()
 
 #define debug_init()
-#define debug_printf(fmt, ...)
 #define debug_put_reg8_p(msg, regval)
+
+#define debug_printf(fmt, ...)
 
 #endif  // DEBUG
 

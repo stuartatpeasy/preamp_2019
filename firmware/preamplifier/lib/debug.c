@@ -4,17 +4,20 @@
     Stuart Wallace <stuartw@atom.net>, August 2018.
 */
 
+#include "platform.h"
 #include "debug.h"
 
 #ifdef DEBUG
 
+#if defined(DEBUG_WITH_PRINTF)
 #include <stdarg.h>
+#endif // defined(DEBUG_WITH_PRINTF)
 #include <stdio.h>
 #include "types.h"
 
-
+#if defined(DEBUG_WITH_PRINTF)
 static char debug_buf[DEBUG_BUF_LEN];
-
+#endif // DEBUG_WITH_PRINTF
 
 // debug_init() - initialise debugging via USART0.
 //
@@ -29,6 +32,7 @@ void debug_init()
 }
 
 
+#if defined(DEBUG_WITH_PRINTF)
 // debug_printf() - a variant of printf() that writes to the debug channel (usually USART0).  Note
 // that the length of the temporary buffer used by this function is specified by DEBUG_BUF_LEN, and
 // is likely to be quite small.
@@ -43,6 +47,7 @@ void debug_printf(char *fmt, ...)
 
     va_end(ap);
 }
+#endif // defined(DEBUG_WITH_PRINTF)
 
 
 // debug_put_reg8_p() - write <msg> (a string which must be located in the program memory space) to

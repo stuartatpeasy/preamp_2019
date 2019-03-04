@@ -222,10 +222,10 @@
     <Compile Include="util\irq.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="volume.c">
+    <Compile Include="controls.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="volume.h">
+    <Compile Include="controls.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>

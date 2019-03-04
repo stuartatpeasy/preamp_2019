@@ -51,9 +51,20 @@ typedef enum IRRXState
 #define IRRX_LOCKOUT_CCMP_VAL           (F_CPU / 1000)   // Timer compare value for 1ms delay
 #define IRRX_LOCKOUT_INITIAL_COUNT      (50)             // Number of 1ms delays in lockout
 
-static volatile IRRXState_t irrxstate;
+static volatile IRRXState_t state;
 static volatile uint8_t lockout_count;
-volatile uint16_t irrxdata;
+volatile uint16_t raw_data, rx_data;
+
+
+// ir_init() - initialise IO and state machine to prepare to receive commands from the infrared
+// interface.
+//
+void ir_init()
+{
+    state = IRRXState_Idle;
+    gpio_make_input(PIN_IR_RX);
+    gpio_set_sense(PIN_IR_RX, GPIOSenseFalling);
+}
 
 
 // ir_start_lockout() - begin a "lockout" period, during which activity on the IR RX port will be
@@ -62,9 +73,57 @@ volatile uint16_t irrxdata;
 //
 static void ir_start_lockout()
 {
-    irrxstate = IRRXState_Lockout;
+    state = IRRXState_Lockout;
     lockout_count = IRRX_LOCKOUT_INITIAL_COUNT;
     TCB0_CCMP = IRRX_LOCKOUT_CCMP_VAL;
+}
+
+
+// isr_ir_rx() - handle the first edge of a received IR command packet.  This function is called
+// only at the start of IR data reception.  It disables the port pin change-of-state interrupt
+// which caused it to be triggered, and then sets up a compare interrupt on timer B so that the
+// data in the IR packet can be read.
+//
+static void isr_ir_rx()
+{
+    gpio_set_sense(PIN_IR_RX, GPIOSenseIntDisable);
+
+    // Received a high-to-low transition on the IR RX pin, indicating the start of an IR command.
+    // If the IR command-processor state machine is idle, configure the timer to trigger an
+    // interrupt after 0.25 RC-5 bit times.  If the IR RX pin is still low at this point, we will
+    // start receiving an IR command.  Otherwise we will assume that the received transition was a
+    // glitch.
+    if(state == IRRXState_Idle)
+    {
+        // One RC-5 bit time equals 64 cycles of a 36kHz wave, which equals 1778us or one cycle of
+        // a 562.5Hz wave.  Timer B will be configured to use the peripheral clock as its clock
+        // source.  The compare value for the timer is therefore:
+        //
+        // 0.25 * (f(pclk) / 562.5) = f(pclk) / 2250.
+        TCB0_CCMP = F_CPU / 2250;
+
+        // Ensure that various control flags have their default values
+        TCB0_CTRLB = 0;
+
+        // Set peripheral clock as timer B clock source and enable timer B
+        TCB0_CTRLA = TCB_CLKSEL_CLKDIV1_gc | TCB_ENABLE_bm;
+
+        // Enable timer B interrupt
+        TCB0_INTCTRL |= TCB_CAPT_bm;
+
+        state = IRRXState_Start1;
+    }
+}
+
+
+// ir_get_cmd() - return the last IR command packet received by the demodulator, and reset the
+// last-command register.
+//
+IRCommand_t ir_get_cmd()
+{
+    const IRCommand_t ret = rx_data;
+    rx_data = 0;
+    return ret;
 }
 
 
@@ -87,7 +146,7 @@ ISR(TCB0_INT_vect)
 {
     TCB0_INTFLAGS |= TCB_CAPT_bm;       // Acknowledge interrupt
 
-    switch(irrxstate)
+    switch(state)
     {
         case IRRXState_Idle:
             // Ignore interrupt
@@ -100,7 +159,7 @@ ISR(TCB0_INT_vect)
                 // The end of the lockout period has been reached.  Prepare for reception of new IR
                 // data by resetting the IR RX state machine, disabling the timer interrupt and re-
                 // enabling the interrupt on falling transitions of the IR RX input pin.
-                irrxstate = IRRXState_Idle;
+                state = IRRXState_Idle;
                 TCB0_INTCTRL &= ~TCB_CAPT_bm;
                 gpio_set_sense(PIN_IR_RX, GPIOSenseFalling);
             }
@@ -115,7 +174,7 @@ ISR(TCB0_INT_vect)
                 // Amend the timer compare value so that an interrupt is generated once per RC-5
                 // bit time.  This enables us to read subsequent bits.
                 TCB0_CCMP = F_CPU / 563;        // The RC-5 bit rate is 562.5Hz
-                irrxstate = IRRXState_Start2;
+                state = IRRXState_Start2;
             }
             else
                 ir_start_lockout();
@@ -127,8 +186,8 @@ ISR(TCB0_INT_vect)
             // If the bit value is not zero, assume a glitch and lock out the receiver.
             if(!gpio_read(PIN_IR_RX))
             {
-                irrxstate = IRRXState_Toggle;
-                irrxdata = 0;
+                state = IRRXState_Toggle;
+                raw_data = 0;
             }
             else
                 ir_start_lockout();
@@ -145,65 +204,18 @@ ISR(TCB0_INT_vect)
         case IRRXState_Data2:
         case IRRXState_Data3:
         case IRRXState_Data4:
-            irrxdata <<= 1;
-            irrxdata |= gpio_read(PIN_IR_RX) ? 0 : 1;
-            ++irrxstate;
+            raw_data <<= 1;
+            raw_data |= gpio_read(PIN_IR_RX) ? 0 : 1;
+            ++state;
             break;
 
         case IRRXState_Data5:
-            irrxdata <<= 1;
-            irrxdata |= gpio_read(PIN_IR_RX) ? 0 : 1;
+            raw_data <<= 1;
+            raw_data |= gpio_read(PIN_IR_RX) ? 0 : 1;
+            rx_data = raw_data;
             ir_start_lockout();
-            debug_puthex_word(irrxdata);
+            debug_puthex_word(raw_data);
             debug_putchar('\n');
             break;
-    }
-}
-
-
-// ir_init() - initialise IO and state machine to prepare to receive commands from the infrared
-// interface.
-//
-void ir_init()
-{
-    irrxstate = IRRXState_Idle;
-    gpio_make_input(PIN_IR_RX);
-    gpio_set_sense(PIN_IR_RX, GPIOSenseFalling);
-}
-
-
-// isr_ir_rx() - handle the first edge of a received IR command packet.  This function is called
-// only at the start of IR data reception.  It disables the port pin change-of-state interrupt
-// which caused it to be triggered, and then sets up a compare interrupt on timer B so that the
-// data in the IR packet can be read.
-//
-static void isr_ir_rx()
-{
-    gpio_set_sense(PIN_IR_RX, GPIOSenseIntDisable);
-
-    // Received a high-to-low transition on the IR RX pin, indicating the start of an IR command.
-    // If the IR command-processor state machine is idle, configure the timer to trigger an
-    // interrupt after 0.25 RC-5 bit times.  If the IR RX pin is still low at this point, we will
-    // start receiving an IR command.  Otherwise we will assume that the received transition was a
-    // glitch.
-    if(irrxstate == IRRXState_Idle)
-    {
-        // One RC-5 bit time equals 64 cycles of a 36kHz wave, which equals 1778us or one cycle of
-        // a 562.5Hz wave.  Timer B will be configured to use the peripheral clock as its clock
-        // source.  The compare value for the timer is therefore:
-        //
-        // 0.25 * (f(pclk) / 562.5) = f(pclk) / 2250.
-        TCB0_CCMP = F_CPU / 2250;
-
-        // Ensure that various control flags have their default values
-        TCB0_CTRLB = 0;
-
-        // Set peripheral clock as timer B clock source and enable timer B
-        TCB0_CTRLA = TCB_CLKSEL_CLKDIV1_gc | TCB_ENABLE_bm;
-
-        // Enable timer B interrupt
-        TCB0_INTCTRL |= TCB_CAPT_bm;
-
-        irrxstate = IRRXState_Start1;
     }
 }

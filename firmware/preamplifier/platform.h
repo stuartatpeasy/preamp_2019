@@ -9,6 +9,9 @@
     lib/gpio.h.
 */
 
+// Uncomment this to enable the debug_printf() function; otherwise this function is a NOP.
+#define DEBUG_WITH_PRINTF
+
 // Note that a macro, defining the module type for which we're building firmware, must be defined
 // somewhere.  This definition currently resides in the project configuration.  Before build, a
 // specific configuration is selected: e.g. "PA_MONO_TAS5760M_Debug", for a debug build of firmware
@@ -33,9 +36,9 @@
                            ATtiny816
                        +---------------+
                   VDD -| 1          20 |- GND
-       VPL_SENSE  PA4 -| 2          19 |- PA3  SPI_SCK
+                  PA4 -| 2          19 |- PA3  SPI_SCK
        VMI_SENSE  PA5 -| 3          18 |- PA2
-        5V_SENSE  PA6 -| 4          17 |- PA1  SPI_MOSI
+       VPL_SENSE  PA6 -| 4          17 |- PA1  SPI_MOSI
          BAL_POT  PA7 -| 5          16 |- PA0  UPDI
         PB_POWER  PB5 -| 6          15 |- PC3
                   PB4 -| 7          14 |- PC2
