@@ -9,12 +9,24 @@
     decode the RC-5 data from the demodulator output.
 */
 
-#include "ir.h"
 #include "platform.h"
+#include "ir.h"
+#include "commands.h"
 #include "lib/debug.h"
 #include "lib/gpio.h"
 #include <avr/interrupt.h>
 
+
+#define IR_ADDR             (0x15)          // RC-5 address for infrared commands
+
+// Extract the address field (bits 6-10) from an RC-5 packet
+#define IR_ADDRESS(x)       (((x) >> 6) & 0x1f)
+
+// Extract the command field (bits 0-5) from an RC-5 packet
+#define IR_COMMAND(x)       ((x) & 0x3f)
+
+// Evaluate to non-zero if the "toggle" bit (bit 11) is set; zero otherwise
+#define IR_TOGGLE(x)        ((x) & 0x800)
 
 static void isr_ir_rx();
 static void ir_start_lockout();
@@ -116,14 +128,16 @@ static void isr_ir_rx()
 }
 
 
-// ir_get_cmd() - return the last IR command packet received by the demodulator, and reset the
-// last-command register.
+// ir_get_cmd() - if the last IR command packet returned by the demodulator was addressed to this
+// device, return the command code from the packet; otherwise return zero.  In all cases, discard
+// the packet.
 //
-IRCommand_t ir_get_cmd()
+Command_t ir_get_cmd()
 {
-    const IRCommand_t ret = rx_data;
+    const uint16_t ret = rx_data;
     rx_data = 0;
-    return ret;
+
+    return (Command_t) ((IR_ADDRESS(ret) == IR_ADDR) ? IR_COMMAND(ret) : 0);
 }
 
 
@@ -132,10 +146,12 @@ IRCommand_t ir_get_cmd()
 //
 ISR(PORTC_PORT_vect)            // FIXME - find a way to get vect from pin
 {
-    if(PORTC_INTFLAGS & gpio_pin_bit(PIN_IR_RX))
-        isr_ir_rx();
+    const uint8_t flags = PORTC_INTFLAGS;
 
     PORTC_INTFLAGS = 0xff;      // FIXME - add a fn to gpio.c to do this
+    if(flags & gpio_pin_bit(PIN_IR_RX))
+        isr_ir_rx();
+
 }
 
 

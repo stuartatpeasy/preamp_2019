@@ -7,9 +7,18 @@
     Stuart Wallace <stuartw@atom.net>, February 2019.
 */
 
+#include "commands.h"
+#include <stdint.h>
+
+
 void controls_init();
 void volume_up();
 void volume_down();
 void volume_apply_change();
+uint8_t power_button_pressed();
+uint8_t power_button_released();
+void set_channel(const uint8_t channel);
+void set_channel_from_nv();
+Command_t get_command();
 
 #endif

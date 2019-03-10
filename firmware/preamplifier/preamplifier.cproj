@@ -138,16 +138,31 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="commands.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="dev\pga2311.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="dev\pga2311.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="expander.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="expander.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="ir.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="ir.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="laws.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="laws.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="lib\adc.c">
@@ -210,6 +225,12 @@
     <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="nvmem.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="nvmem.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="platform.h">
       <SubType>compile</SubType>
     </Compile>
@@ -217,6 +238,12 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="platform_attinyX16.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="shiftreg.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="shiftreg.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="util\irq.h">

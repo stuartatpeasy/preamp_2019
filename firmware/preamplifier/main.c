@@ -5,33 +5,31 @@
 */
 
 #include "platform.h"                       // for MODULE_TYPE
+#include "commands.h"
 #include "controls.h"
+#include "expander.h"
 #include "ir.h"
+#include "shiftreg.h"
 #include "lib/adc.h"
 #include "lib/clk.h"
 #include "lib/debug.h"
 #include "lib/gpio.h"
 #include "lib/spi.h"
 #include "lib/vref.h"
-#include <avr/interrupt.h>                  // sei()
+#include "util/irq.h"
+#include <avr/sleep.h>
 #include <stdint.h>
 #include <util/delay.h>
 
 
-#define IR_ADDR_PREAMP      (0x15)          // RC-5 address for infrared commands
-
-#define IR_CMD_POWER        (0x01)          // Power button
-#define IR_CMD_MUTE         (0x02)          // Mute button
-#define IR_CMD_CHANNEL1     (0x10)          // Channel 1
-#define IR_CMD_CHANNEL2     (0x11)          // Channel 2
-#define IR_CMD_CHANNEL3     (0x12)          // Channel 3
-#define IR_CMD_CHANNEL4     (0x13)          // Channel 4
-#define IR_CMD_VOL_UP       (0x20)          // Increase volume
-#define IR_CMD_VOL_DOWN     (0x21)          // Decrease volume
-
-void firmware_main(void);
+static void firmware_main(void);
+static void power_off();
+static void power_off_loop();
+static void power_on();
+static void power_on_loop();
 
 int8_t g_irq_state = 0;                     // Used in util/irq.h
+uint8_t power = 0;                          // System power state: 0=off, !0=on
 
 
 // Entry point
@@ -52,17 +50,22 @@ int main(void)
     adc_set_initdelay(ADCInitDelay16);
     adc_enable(1);
 
-
     // firmware_main() should loop eternally; loop here in case it doesn't.
     while(1)
         firmware_main();        // should never return
 }
 
 
-
-void firmware_main()
+static void firmware_main()
 {
-    uint8_t power = 0, mute = 0;
+    power = 0;              // Start in "off" state
+
+    // Make power button pin an input, and enable pull-up; make regulator-enable signal an output
+    // and set it to 0 to disable the regulators.
+    gpio_set_pullup(PIN_PB_POWER, 1);
+    gpio_clear(PIN_REG_EN);
+    gpio_make_input(PIN_PB_POWER);
+    gpio_make_output(PIN_REG_EN);
 
     // Initialise SPI port 0 - this is the control interface for the PGA2311 programmable-gain
     // amplifier, the TPIC6B595 shift-register/driver, and the MCP23S17 port expander.
@@ -70,72 +73,122 @@ void firmware_main()
     spi0_port_activate(1);
     spi0_enable(1);
 
+    // TODO: consider moving these init calls into the power_on() function.
+    expander_init();
+    shiftreg_init();
     controls_init();
     ir_init();
 
-    sei();
+    set_sleep_mode(SLEEP_MODE_IDLE);
+    interrupt_enable_increment();
 
     while(1)
     {
-        const IRCommand_t ir_cmd = ir_get_cmd();
-        if(ir_cmd && (IR_ADDRESS(ir_cmd) == IR_ADDR_PREAMP))
-        {
-            if(!power && (IR_COMMAND(ir_cmd) == IR_CMD_POWER))
-            {
-                power = 1;
-                // TODO: handle switch-on
-                // Channel switch:
-                // - open output relay
-                // - switch off previous channel LED
-                // - wait 100ms
-                // - open previous channel relay
-                // - wait 100ms
-                // - close new channel relay
-                // - illuminate new channel LED
-                // - wait 300ms
-                // - close output relay
-            }
-            else
-            {
-                // TODO: handle IR command...
-                switch(IR_COMMAND(ir_cmd))
-                {
-                    case IR_CMD_POWER:
-                        // TODO: handle switch-off
-                        power = 0;
-                        break;
-
-                    case IR_CMD_MUTE:
-                        mute = !mute;
-                        // TODO: mute/un-mute
-                        break;
-
-                    case IR_CMD_CHANNEL1:
-                        break;
-
-                    case IR_CMD_CHANNEL2:
-                        break;
-
-                    case IR_CMD_CHANNEL3:
-                        break;
-
-                    case IR_CMD_CHANNEL4:
-                        break;
-
-                    case IR_CMD_VOL_UP:
-                        volume_up();
-                        break;
-
-                    case IR_CMD_VOL_DOWN:
-                        volume_down();
-                        break;
-
-                    default:
-                        break;
-                }
-            }
-        }
-
-        volume_apply_change();
+        power ? power_on_loop() : power_off_loop();
+        sleep_mode();
     }
+}
+
+
+// power_on_loop() - this function is executed repeatedly while the system is switched on.  It
+// handles commands received from the infrared remote control, and monitors physical controls
+// (buttons / encoders / potentiometers) in order to update the state of the system.
+//
+static void power_on_loop()
+{
+    const Command_t cmd = get_command();
+    static uint8_t mute = 0;
+
+    switch(cmd)
+    {
+        case CmdPower:
+            power_off();        // Switch off
+            return;
+
+        case CmdMute:
+            mute = !mute;
+            // TODO: mute/un-mute
+            break;
+
+        case CmdChannel1:
+            set_channel(1);
+            break;
+
+        case CmdChannel2:
+            set_channel(2);
+            break;
+
+        case CmdChannel3:
+            set_channel(3);
+            break;
+
+        case CmdChannel4:
+            set_channel(4);
+            break;
+
+        case CmdVolUp:
+            volume_up();
+            break;
+
+        case CmdVolDown:
+            volume_down();
+            break;
+
+        default:
+            break;
+    }
+
+    volume_apply_change();
+}
+
+
+// power_off_loop() - this function is executed repeatedly while the system is powered off.  It
+// waits until it receives a power-on command, either from the infrared receiver or via a button-
+// press, and then initiates power-up by calling power_on().
+//
+static void power_off_loop()
+{
+    // If we have received an IR command addressed to this device, and it's a "power" command, or
+    // the power button has been pressed: switch on.
+    if(get_command() == CmdPower)
+        power_on();     // Switch on
+}
+
+
+// power_on() - handle a request to switch on the system.
+//
+static void power_on()
+{
+    // TODO: handle switch-on
+    gpio_set(PIN_REG_EN);               // Switch on regulators
+    _delay_ms(500);                     // Wait for regulators to settle
+
+    // - switch off all shift register outputs
+    expander_sr_output_enable(1);       // Enable TPIC6B595 shift register outputs
+    set_channel_from_nv();
+
+    // Wait for power button to be released, so that the code in power_on_loop() doesn't switch the
+    // system off again.
+    while(!power_button_released())
+        ;
+
+    power = 1;
+}
+
+
+// power_off() - handle a request to switch off the system.
+//
+static void power_off()
+{
+    set_channel(0);                     // Disconnect inputs and outputs
+    expander_sr_output_enable(0);       // Disable TPIC6B595 shift register outputs
+
+    gpio_clear(PIN_REG_EN);             // Disable regulators
+
+    // Wait for power button to be released, so that the code in power_off_loop() doesn't switch
+    // the system off again.
+    while(!power_button_released())
+        ;
+
+    power = 0;
 }

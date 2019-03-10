@@ -1,55 +1,65 @@
-avr
+ATTiny816	dir	port	pin
 ------------------------------------------------------------------------------
-nEXP_CS		OUT		MCP23S17 port expander chip select
-SCLK		OUT
-MOSI		OUT
-MISO		IN
-UART_TX		OUT		Bluetooth module command interface TX
-UART_RX		IN		Bluetooth module command interface RX
-PB_POWER	IN	PB5	Power pushbutton
-REG_SW		OUT		Enable signal for analogue section voltage regulators
-IR_RX		IN		Infrared receiver
-VOL_ENC_A	IN
-VOL_ENC_B	IN
-POT_BAL		AIN	PA7
-V+_SENSE	AIN	PA6
-V-_SENSE	AIN	PA5	Actually senses ratio of +15V and -15V rails
+POT_BAL		AIN	PA7	5	Balance potentiometer
+V+_SENSE	AIN	PA6	4	+15V sense
+V-_SENSE	AIN	PA5	3	Actually senses ratio of +15V and -15V rails
+			PA4	2
+SCLK		OUT	PA3	19	SPI CLK
+MISO		IN	PA2	18	SPI RX
+MOSI		OUT	PA1	17	SPI TX
+UPDI		I/O	PA0	16
+PB_POWER	IN	PB5	6	Power pushbutton
+REG_SW		OUT	PB4	7	Enable signal for analogue section voltage regulators
+UART_RX		IN	PB3	8	Bluetooth module command interface RX
+UART_TX		OUT	PB2	9	Bluetooth module command interface TX
+VOL_ENC_A	IN	PB1	10	} rotary encoder for volume
+VOL_ENC_B	IN	PB0	11	}
+SR_RCLK		OUT	PC3	15	TPIC6B595 register clock (cannot be on expander)
+EXP_nCS		OUT	PC2	14	MCP23S17 port expander chip select
+EXP_nRESET	OUT	PC1	13	[optional] MCP23S17 port expander reset
+IR_RX		IN	PC0	12	Infrared receiver
 ----------------+-------------------------------------------------------------
 3 adc		|
 6 in		|
-5 out		|
-1 UPDI		| 15 total / 18
+6 out		|
+1 UPDI		| 16 total / 18
 ----------------+-------------------------------------------------------------
 
 
-mcp23s17
+MCP23S17	dir	port	pin
 ------------------------------------------------------------------------------
-PB_CH1		IN
-PB_CH2		IN
-PB_CH3		IN
-PB_CH4		IN
-LED_CH1		OUT
-LED_CH2		OUT
-LED_CH3		OUT
-LED_CH4		OUT
-LED_MUTE	OUT
-TPIC_RCLK	OUT		TPIC6B595 register clock
-PGA_nCS		OUT		PGA2311 chip select
-PGA_nMUTE	OUT		PGA2311 mute
-nMUTE		OUT
+PB_CH4		IN	GPB7	8	Channel 4 pushbutton (Bluetooth)
+PB_CH3		IN	GPB6	7	Channel 3 pushbutton
+PB_CH2		IN	GPB5	6	Channel 2 pushbutton
+PB_CH1		IN	GPB4	5	Channel 1 pushbutton
+LED_CH4		OUT	GPB3	4	Channel 4 LED
+LED_CH3		OUT	GPB2	3	Channel 3 LED
+LED_CH2		OUT	GPB1	2	Channel 2 LED
+LED_CH1		OUT	GPB0	1	Channel 1 LED
+		OUT	GPA7	28	
+SR_nGATE	OUT	GPA6	27	TPIC6B595 output enable
+PGA_nCS		OUT	GPA5	26	PGA2311 chip select
+PGA_nMUTE	OUT	GPA4	25	PGA2311 mute
+		OUT	GPA3	24	
+		OUT	GPA2	23	
+		OUT	GPA1	22	
+		OUT	GPA0	21	
 ----------------+-------------------------------------------------------------
 4 in		|
-9 out		| 13 total / 16
+8 out		| 12 total / 16
 ----------------+-------------------------------------------------------------
 
 
 tpic6b595n
 ------------------------------------------------------------------------------
-RL1		OUT	DRAIN7	17
-RL2		OUT	DRAIN6	16
-RL3		OUT	DRAIN5	15
-RL4		OUT	DRAIN4	14
-RLOUT		OUT	DRAIN3	7
+RLOUT		OUT	DRAIN7	17
+		OUT	DRAIN6	16
+		OUT	DRAIN5	15
+		OUT	DRAIN4	14
+RL4		OUT	DRAIN3	7
+RL3		OUT	DRAIN2	6
+RL2		OUT	DRAIN1	5
+RL1		OUT	DRAIN0	4
 ------------------------------------------------------------------------------
 5 out
 ------------------------------------------------------------------------------
