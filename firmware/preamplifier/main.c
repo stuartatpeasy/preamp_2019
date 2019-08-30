@@ -161,7 +161,8 @@ static void power_on()
 {
     // TODO: handle switch-on
     gpio_set(PIN_REG_EN);               // Switch on regulators
-    _delay_ms(500);                     // Wait for regulators to settle
+    _delay_ms(1000);                    // Wait for regulators to settle
+    // FIXME: sample V+ and V- to determine when regulators are ready
 
     // - switch off all shift register outputs
     expander_sr_output_enable(1);       // Enable TPIC6B595 shift register outputs
